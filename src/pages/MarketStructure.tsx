@@ -1,8 +1,8 @@
 import { PatternPageShell } from '@/components/PatternPageShell';
-import { usePatternScanner } from '@/hooks/usePatternScanner';
+import { useSharedPatternScanner } from '@/contexts/PatternScannerContext';
 
 const MarketStructurePage = () => {
-  const { structureGroups, scanning, lastScanTime, scanProgress, runScan } = usePatternScanner();
+  const { structureGroups, scanning, lastScanTime, scanProgress, runScan } = useSharedPatternScanner();
 
   return (
     <PatternPageShell

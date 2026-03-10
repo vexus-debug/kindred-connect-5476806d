@@ -8,8 +8,8 @@ import { TIMEFRAME_LABELS } from '@/types/scanner';
 
 const SCAN_TIMEFRAMES: Timeframe[] = ['5', '15', '60', '240', 'D', 'W'];
 const TOP_SYMBOLS = 50;
-const MAX_OLD_PATTERNS = 10;
-const SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_PER_TIMEFRAME = 10;
+const SCAN_INTERVAL_MS = 5 * 60 * 1000;
 
 export interface DetectedPattern {
   id: string;
@@ -37,23 +37,12 @@ export function usePatternScanner() {
   const scanningRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 
-  const mergePatterns = (
-    prev: DetectedPattern[],
-    newPatterns: DetectedPattern[],
-  ): DetectedPattern[] => {
-    // Deduplicate by id; keep new ones + up to MAX_OLD_PATTERNS old ones
-    const newIds = new Set(newPatterns.map(p => p.id));
-    const old = prev.filter(p => !newIds.has(p.id)).slice(0, MAX_OLD_PATTERNS);
-    return [...newPatterns, ...old];
-  };
-
   const runScan = useCallback(async () => {
     if (scanningRef.current) return;
     scanningRef.current = true;
     setScanning(true);
 
     try {
-      // Fetch top symbols
       const categories: ('spot' | 'linear')[] = ['linear', 'spot'];
       const symbolMap = new Map<string, { symbol: string; category: 'spot' | 'linear'; price: number }>();
 
@@ -83,7 +72,8 @@ export function usePatternScanner() {
       const newStructure: DetectedPattern[] = [];
       let progress = 0;
 
-      const BATCH_SIZE = 3;
+      // Increased batch size for speed
+      const BATCH_SIZE = 8;
       for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
         const batch = symbols.slice(i, i + BATCH_SIZE);
         await Promise.all(batch.map(async ({ symbol, category, price }) => {
@@ -95,7 +85,6 @@ export function usePatternScanner() {
               const now = Date.now();
               const sym = symbol.replace('USDT', '');
 
-              // Candlestick patterns
               const cPatterns = detectCandlestickPatterns(candles);
               for (const p of cPatterns) {
                 newCandlestick.push({
@@ -104,7 +93,6 @@ export function usePatternScanner() {
                 });
               }
 
-              // Chart patterns
               const chPatterns = detectChartPatterns(candles);
               for (const p of chPatterns) {
                 newChart.push({
@@ -113,7 +101,6 @@ export function usePatternScanner() {
                 });
               }
 
-              // Market structure
               const msEvents = detectMarketStructure(candles);
               for (const p of msEvents) {
                 newStructure.push({
@@ -127,14 +114,15 @@ export function usePatternScanner() {
           }
         }));
 
+        // Reduced delay between batches
         if (i + BATCH_SIZE < symbols.length) {
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 100));
         }
       }
 
-      setCandlestickPatterns(prev => mergePatterns(prev, newCandlestick));
-      setChartPatterns(prev => mergePatterns(prev, newChart));
-      setStructurePatterns(prev => mergePatterns(prev, newStructure));
+      setCandlestickPatterns(newCandlestick);
+      setChartPatterns(newChart);
+      setStructurePatterns(newStructure);
       setLastScanTime(Date.now());
     } catch (err) {
       console.error('Pattern scan error:', err);
@@ -153,7 +141,16 @@ export function usePatternScanner() {
   const groupByTimeframe = (patterns: DetectedPattern[]): PatternGroup[] => {
     const groups: PatternGroup[] = [];
     for (const tf of SCAN_TIMEFRAMES) {
-      const tfPatterns = patterns.filter(p => p.timeframe === tf);
+      const tfPatterns = patterns
+        .filter(p => p.timeframe === tf)
+        .sort((a, b) => {
+          // Sort by significance first (high > medium > low), then by recency
+          const sigOrder = { high: 0, medium: 1, low: 2 };
+          const sigDiff = sigOrder[a.pattern.significance] - sigOrder[b.pattern.significance];
+          if (sigDiff !== 0) return sigDiff;
+          return b.detectedAt - a.detectedAt;
+        })
+        .slice(0, MAX_PER_TIMEFRAME);
       if (tfPatterns.length > 0) {
         groups.push({ timeframe: tf, label: TIMEFRAME_LABELS[tf], patterns: tfPatterns });
       }
