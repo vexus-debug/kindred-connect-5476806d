@@ -78,7 +78,7 @@ export function usePatternScanner(trendAssets: AssetTrend[] = []) {
         const serverTime = new Date(row.scanned_at).getTime();
         if (serverTime <= serverScanTime) continue;
         
-        const patterns = (row.data || []) as DetectedPattern[];
+        const patterns = (row.data || []) as unknown as DetectedPattern[];
         if (row.id === 'candlestick') setCandlestickPatterns(patterns);
         else if (row.id === 'chart') setChartPatterns(patterns);
         else if (row.id === 'structure') setStructurePatterns(patterns);
