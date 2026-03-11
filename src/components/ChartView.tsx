@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { createChart, type IChartApi, type ISeriesApi, ColorType, LineStyle } from 'lightweight-charts';
+import { createChart, CandlestickSeries, HistogramSeries, LineSeries, type IChartApi, type ISeriesApi, ColorType, LineStyle } from 'lightweight-charts';
 import { fetchKlines } from '@/lib/bybit-api';
 import type { Candle, Timeframe } from '@/types/scanner';
 import { TIMEFRAME_LABELS, ALL_TIMEFRAMES } from '@/types/scanner';
@@ -12,19 +12,17 @@ interface ChartViewProps {
   onClose?: () => void;
   supportLevels?: number[];
   resistanceLevels?: number[];
-  orderBlocks?: { high: number; low: number; type: 'bull' | 'bear' }[];
-  fvgZones?: { high: number; low: number; type: 'bull' | 'bear' }[];
 }
 
 export function ChartView({
   symbol, initialTimeframe = '60', onClose,
   supportLevels = [], resistanceLevels = [],
-  orderBlocks = [], fvgZones = [],
 }: ChartViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const candleSeriesRef = useRef<any>(null);
+  const volumeSeriesRef = useRef<any>(null);
+  const emaSeriesRefs = useRef<any[]>([]);
   const [timeframe, setTimeframe] = useState<Timeframe>(initialTimeframe);
   const [loading, setLoading] = useState(true);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -61,7 +59,7 @@ export function ChartView({
       },
     });
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: 'hsl(142, 72%, 45%)',
       downColor: 'hsl(0, 72%, 50%)',
       borderDownColor: 'hsl(0, 72%, 50%)',
@@ -70,7 +68,7 @@ export function ChartView({
       wickUpColor: 'hsl(142, 72%, 35%)',
     });
 
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: 'volume',
     });
@@ -105,7 +103,6 @@ export function ChartView({
     try {
       const data = await fetchKlines(symbol, timeframe, 'linear', 220);
       if (data.length === 0) {
-        // Try spot
         const spotData = await fetchKlines(symbol, timeframe, 'spot', 220);
         setCandles(spotData);
       } else {
@@ -122,7 +119,14 @@ export function ChartView({
 
   // Update chart data
   useEffect(() => {
-    if (!candleSeriesRef.current || !volumeSeriesRef.current || candles.length === 0) return;
+    const chart = chartRef.current;
+    if (!candleSeriesRef.current || !volumeSeriesRef.current || !chart || candles.length === 0) return;
+
+    // Remove old EMA series
+    for (const s of emaSeriesRefs.current) {
+      try { chart.removeSeries(s); } catch {}
+    }
+    emaSeriesRefs.current = [];
 
     const candleData = candles.map(c => ({
       time: (c.time / 1000) as any,
@@ -141,13 +145,6 @@ export function ChartView({
     candleSeriesRef.current.setData(candleData);
     volumeSeriesRef.current.setData(volumeData);
 
-    // Draw overlays
-    const chart = chartRef.current;
-    if (!chart) return;
-
-    // Remove old line series (EMAs, S/R) — recreate on each data change
-    // We'll use price lines on the candle series for S/R
-    
     // Support lines
     for (const level of supportLevels) {
       candleSeriesRef.current.createPriceLine({
@@ -179,13 +176,15 @@ export function ChartView({
       const ema21 = calcEMAForChart(closes, 21);
       const ema50 = calcEMAForChart(closes, 50);
 
-      const ema9Series = chart.addLineSeries({ color: 'hsl(45, 90%, 55%)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-      const ema21Series = chart.addLineSeries({ color: 'hsl(217, 90%, 60%)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-      const ema50Series = chart.addLineSeries({ color: 'hsl(280, 72%, 55%)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+      const ema9Series = chart.addSeries(LineSeries, { color: 'hsl(45, 90%, 55%)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+      const ema21Series = chart.addSeries(LineSeries, { color: 'hsl(217, 90%, 60%)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+      const ema50Series = chart.addSeries(LineSeries, { color: 'hsl(280, 72%, 55%)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
 
-      ema9Series.setData(ema9.map((v, i) => ({ time: (candles[i].time / 1000) as any, value: v })).filter(d => d.value > 0));
-      ema21Series.setData(ema21.map((v, i) => ({ time: (candles[i].time / 1000) as any, value: v })).filter(d => d.value > 0));
-      ema50Series.setData(ema50.map((v, i) => ({ time: (candles[i].time / 1000) as any, value: v })).filter(d => d.value > 0));
+      ema9Series.setData(ema9.map((v, i) => ({ time: (candles[i].time / 1000) as any, value: v })).filter((d: any) => d.value > 0));
+      ema21Series.setData(ema21.map((v, i) => ({ time: (candles[i].time / 1000) as any, value: v })).filter((d: any) => d.value > 0));
+      ema50Series.setData(ema50.map((v, i) => ({ time: (candles[i].time / 1000) as any, value: v })).filter((d: any) => d.value > 0));
+
+      emaSeriesRefs.current = [ema9Series, ema21Series, ema50Series];
     }
 
     chart.timeScale().fitContent();
@@ -200,7 +199,6 @@ export function ChartView({
           {loading && <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse-dot" />}
         </div>
         <div className="flex items-center gap-1">
-          {/* TF selector */}
           {ALL_TIMEFRAMES.map(tf => (
             <button
               key={tf}

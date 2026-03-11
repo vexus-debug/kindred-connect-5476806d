@@ -45,14 +45,16 @@ export function calculateConfluence(
   // 1. Trend Scanner (weight: 35%)
   const trendAsset = trendAssets.find(a => a.symbol === symbol);
   if (trendAsset) {
-    const sig = trendAsset.signals[tf];
+    const sig = trendAsset.signals[tf] as any;
     if (sig && sig.direction) {
       const strength = sig.strength === 'strong' ? 90 : sig.strength === 'moderate' ? 65 : 40;
+      const conf = sig.confirmations ?? 0;
+      const total = sig.totalChecks ?? 0;
       components.push({
         source: 'trend',
         signal: sig.direction,
         strength,
-        label: `${sig.strength} ${sig.direction === 'bull' ? 'uptrend' : 'downtrend'} (${sig.confirmations}/${sig.totalChecks})`,
+        label: `${sig.strength} ${sig.direction === 'bull' ? 'uptrend' : 'downtrend'} (${conf}/${total})`,
       });
       if (sig.direction === 'bull') bullScore += strength * 0.35;
       else bearScore += strength * 0.35;
