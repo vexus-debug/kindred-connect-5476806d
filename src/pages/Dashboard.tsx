@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { AlertLog } from '@/components/AlertLog';
 import { ScannerMatrix } from '@/components/ScannerMatrix';
 import { WatchlistPanel } from '@/components/WatchlistPanel';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSharedScanner } from '@/contexts/ScannerContext';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { RefreshCw, BarChart3, Bell, Star } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const Dashboard = () => {
