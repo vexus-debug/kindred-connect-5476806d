@@ -1,8 +1,11 @@
 import { useState, useMemo } from 'react';
 import type { AssetTrend, Timeframe } from '@/types/scanner';
 import { ALL_TIMEFRAMES, TIMEFRAME_LABELS } from '@/types/scanner';
-import type { ConfirmedTrend, IndicatorDetail } from '@/lib/indicators';
+import type { ConfirmedTrend, IndicatorDetail, TrendDuration } from '@/lib/indicators';
 import { getSector, getSectorEmoji, type CryptoSector, ALL_SECTORS } from '@/lib/sectors';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
+import { Search, Star, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Shield, ShieldCheck, ShieldAlert, Target, Gauge, BarChart3, ArrowUpDown, Clock, AlertTriangle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Search, Star, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Shield, ShieldCheck, ShieldAlert, Target, Gauge, BarChart3, ArrowUpDown } from 'lucide-react';
