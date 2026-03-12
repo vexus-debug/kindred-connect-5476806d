@@ -582,6 +582,8 @@ export function analyzeTrend(
 
   const supportResistance = findSupportResistance(candles, { e9, e21, e50, e200 });
 
+  const trendDuration = calculateTrendDuration(candles, direction, ema9, ema21, rsi, macd.histogram, adx, volumeRatio, atr);
+
   return {
     direction, strength,
     ema9: e9, ema21: e21, ema50: e50, ema200: e200,
@@ -590,6 +592,6 @@ export function analyzeTrend(
     indicators,
     rsi, macdHistogram: macd.histogram,
     priceStructure, plusDI, minusDI,
-    probability, supportResistance,
+    probability, supportResistance, trendDuration,
   };
 }
