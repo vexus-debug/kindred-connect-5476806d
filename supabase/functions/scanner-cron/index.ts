@@ -364,6 +364,65 @@ function detectVolumeClusters(candles: Candle[], bins = 20) {
   return { highVolumeZone: z as "support" | "resistance" | "fair_value" | "none", vpocPrice: vp };
 }
 
+// ─── Trend Duration & Reversal Analysis ─────────────────────────────
+function calculateTrendDuration(
+  candles: Candle[],
+  direction: "bull" | "bear",
+  ema9: number[], ema21: number[],
+  rsi: number, macdHist: number, adx: number,
+  volumeRatio: number, atr: number
+) {
+  const price = candles[candles.length - 1].close;
+  const isBull = direction === "bull";
+
+  // Walk backwards to find where EMA9 crossed EMA21
+  let trendStartIdx = candles.length - 1;
+  for (let i = candles.length - 2; i >= 0; i--) {
+    if (i >= ema9.length || i >= ema21.length) break;
+    const wasAligned = isBull ? ema9[i] > ema21[i] : ema9[i] < ema21[i];
+    if (!wasAligned) { trendStartIdx = i + 1; break; }
+    if (i === 0) trendStartIdx = 0;
+  }
+
+  const bars = candles.length - 1 - trendStartIdx;
+  const startPrice = candles[trendStartIdx]?.close ?? price;
+  const startTime = candles[trendStartIdx]?.time ?? 0;
+  const trendMove = ((price - startPrice) / startPrice) * 100;
+
+  // Find extreme for Fibonacci
+  let extreme = startPrice;
+  for (let i = trendStartIdx; i < candles.length; i++) {
+    if (isBull) { if (candles[i].high > extreme) extreme = candles[i].high; }
+    else { if (candles[i].low < extreme) extreme = candles[i].low; }
+  }
+
+  const moveRange = extreme - startPrice;
+  const fibRetrace382 = extreme - moveRange * 0.382;
+  const fibRetrace500 = extreme - moveRange * 0.5;
+  const fibRetrace618 = extreme - moveRange * 0.618;
+  const fibExtend1272 = startPrice + moveRange * 1.272;
+  const fibExtend1618 = startPrice + moveRange * 1.618;
+  const atrStop = isBull ? price - 2 * atr : price + 2 * atr;
+
+  // Exhaustion analysis
+  const exhaustionSignals: string[] = [];
+  if (isBull && rsi > 75) exhaustionSignals.push(`RSI overbought (${rsi.toFixed(0)})`);
+  if (!isBull && rsi < 25) exhaustionSignals.push(`RSI oversold (${rsi.toFixed(0)})`);
+  if (isBull && macdHist < 0) exhaustionSignals.push("MACD histogram negative");
+  if (!isBull && macdHist > 0) exhaustionSignals.push("MACD histogram positive");
+  if (bars > 50) exhaustionSignals.push(`Extended duration (${bars} bars)`);
+  if (adx < 20) exhaustionSignals.push(`ADX weak (${adx.toFixed(0)})`);
+  if (volumeRatio < 0.7) exhaustionSignals.push(`Low volume (${volumeRatio.toFixed(1)}x)`);
+  const pctFromStart = Math.abs(trendMove);
+  if (pctFromStart > 20) exhaustionSignals.push(`Large move (${pctFromStart.toFixed(1)}%)`);
+
+  let exhaustionRisk: "low" | "medium" | "high" = "low";
+  if (exhaustionSignals.length >= 3) exhaustionRisk = "high";
+  else if (exhaustionSignals.length >= 1) exhaustionRisk = "medium";
+
+  return { bars, startPrice, startTime, currentPrice: price, trendMove, fibRetrace382, fibRetrace500, fibRetrace618, fibExtend1272, fibExtend1618, exhaustionRisk, exhaustionSignals, atrStop };
+}
+
 // ─── Trend Analysis (matches client-side analyzeTrend) ──────────────
 function analyzePriceStructure(candles: Candle[], lookback = 30): "bull" | "bear" | "neutral" {
   const r = candles.slice(-lookback);
